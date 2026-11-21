@@ -1,6 +1,6 @@
 # MediVault MVP Entity-Relationship Diagram
 
-This diagram visualizes the PostgreSQL database schema managed via Flyway (`V1__init.sql` and `V2__emergency_contacts.sql`).
+This diagram visualizes the PostgreSQL database schema managed via Flyway (`V1__init.sql`, `V2__emergency_contacts.sql`, and `V3__add_document_metadata.sql`).
 
 ```mermaid
 erDiagram
@@ -48,11 +48,14 @@ erDiagram
     MEDICAL_DOCUMENTS {
         VARCHAR(36) id PK
         VARCHAR(36) patient_id FK
-        VARCHAR(32) document_type "Enum: BLOOD_REPORT, PRESCRIPTION, OTHER"
+        VARCHAR(32) document_type "Enum: BLOOD_REPORT, PRESCRIPTION, RADIOLOGY, CONSULTATION, DISCHARGE, OTHER"
         VARCHAR(255) title
         VARCHAR(128) content_type "e.g. application/pdf"
         BIGINT file_size "bytes"
         DATE report_date
+        VARCHAR(100) doctor "Doctor name from upload form"
+        VARCHAR(200) facility "Hospital/clinic from upload form"
+        TEXT summary "Clinical overview from upload form"
         TIMESTAMP uploaded_at
     }
 

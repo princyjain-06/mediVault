@@ -50,6 +50,18 @@ public class MedicalDocument {
     @Column(name = "report_date")
     private LocalDate reportDate;
 
+    /** Doctor name entered during upload (not extracted) */
+    @Column(length = 100)
+    private String doctor;
+
+    /** Hospital / diagnostic center entered during upload */
+    @Column(length = 200)
+    private String facility;
+
+    /** Clinical summary / notes entered during upload */
+    @Column(columnDefinition = "TEXT")
+    private String summary;
+
     @CreationTimestamp
     @Column(name = "uploaded_at", updatable = false, nullable = false)
     private LocalDateTime uploadedAt;
