@@ -41,6 +41,7 @@ public class MedicalDocumentService {
     private final TextExtractionService textExtractionService;
     private final ClinicalExtractionService clinicalExtractionService;
     private final MedicationService medicationService;
+    private final DocumentSummarizerService documentSummarizerService;
 
     /**
      * List all documents for the logged-in patient, newest first.
@@ -122,6 +123,12 @@ public class MedicalDocumentService {
             throw new RuntimeException("Failed to save file: " + e.getMessage(), e);
         }
 
+        // Set file storage paths
+        String relPath = fileStorageService.pathFor(doc);
+        String dlUrl = "/api/patients/me/documents/" + doc.getId() + "/file";
+        doc.setFilePath(relPath);
+        doc.setFileUrl(dlUrl);
+
         // ── Step 1: Text Extraction (PDFBox / Tess4J OCR) ─────────────────
         String extractedText = textExtractionService.extractText(filePath, doc.getContentType());
         // If clinical summary was provided, merge it for additional context
@@ -130,34 +137,44 @@ public class MedicalDocumentService {
             combinedText = (extractedText.isBlank() ? "" : extractedText + "\n\n") + "Clinical Notes: " + summary.trim();
         }
 
-        // ── Step 2: Clinical Pattern Extraction (Medications & Lab Results)
+        // ── Step 2: Clinical Pattern Extraction (Scoped by DocumentType) ──
         List<Medication> extractedMeds = Collections.emptyList();
         List<LabResult> extractedLabs = Collections.emptyList();
 
         if (!combinedText.isBlank()) {
             try {
-                extractedMeds = clinicalExtractionService.extractMedications(combinedText, patient, doc);
-                if (!extractedMeds.isEmpty()) {
-                    extractedMeds = medicationRepository.saveAll(extractedMeds);
-                    log.info("Extracted and saved {} medications from document {}", extractedMeds.size(), doc.getId());
+                // Prescriptions and general consultation notes extract medications
+                if (doc.getDocumentType() != DocumentType.BLOOD_REPORT) {
+                    extractedMeds = clinicalExtractionService.extractMedications(combinedText, patient, doc);
+                    if (!extractedMeds.isEmpty()) {
+                        extractedMeds = medicationRepository.saveAll(extractedMeds);
+                        log.info("Extracted and saved {} medications from document {}", extractedMeds.size(), doc.getId());
+                    }
                 }
 
-                extractedLabs = clinicalExtractionService.extractLabResults(combinedText, patient, doc);
-                if (!extractedLabs.isEmpty()) {
-                    extractedLabs = labResultRepository.saveAll(extractedLabs);
-                    log.info("Extracted and saved {} lab results from document {}", extractedLabs.size(), doc.getId());
+                // Blood reports and general consultation notes extract lab results
+                if (doc.getDocumentType() != DocumentType.PRESCRIPTION) {
+                    extractedLabs = clinicalExtractionService.extractLabResults(combinedText, patient, doc);
+                    if (!extractedLabs.isEmpty()) {
+                        extractedLabs = labResultRepository.saveAll(extractedLabs);
+                        log.info("Extracted and saved {} lab results from document {}", extractedLabs.size(), doc.getId());
+                    }
                 }
             } catch (Exception e) {
                 log.error("Error during clinical extraction for document {}: {}", doc.getId(), e.getMessage());
             }
         }
 
-        // ── Step 3: Record Extraction Metadata ────────────────────────────
+        // ── Step 3: Record Extraction Metadata & Clinical Summary ──────────
         ExtractionStatus extractionStatus = (!extractedMeds.isEmpty() || !extractedLabs.isEmpty())
                 ? ExtractionStatus.DONE
                 : (combinedText.isBlank() ? ExtractionStatus.PENDING : ExtractionStatus.DONE);
 
         String structuredJson = clinicalExtractionService.buildStructuredJson(extractedMeds, extractedLabs);
+
+        // Generate clinical summary via Gemini API or local synthesizer
+        String clinicalSummary = documentSummarizerService.generateSummary(combinedText, extractedMeds, extractedLabs, doc);
+        doc.setSummary(clinicalSummary);
 
         DocumentExtraction extraction = DocumentExtraction.builder()
                 .document(doc)
@@ -241,6 +258,8 @@ public class MedicalDocumentService {
                 .doctor(doc.getDoctor())
                 .facility(doc.getFacility())
                 .summary(doc.getSummary())
+                .filePath(doc.getFilePath())
+                .fileUrl(doc.getFileUrl() != null ? doc.getFileUrl() : (doc.getId() != null ? "/api/patients/me/documents/" + doc.getId() + "/file" : null))
                 .extractedMedications(meds.isEmpty() ? null : meds)
                 .extractedTextPreview(preview)
                 .build();

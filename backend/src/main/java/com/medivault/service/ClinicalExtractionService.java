@@ -34,9 +34,9 @@ public class ClinicalExtractionService {
             "(?i)\\b(Tab(?:let)?|Cap(?:sule)?|Syr(?:up)?|Inj(?:ection)?|Oint(?:ment)?|Drops?|Rx:?)\\b\\.?"
     );
 
-    // Dosage: e.g. 500mg, 500 mg, 10ml, 2.5mcg, 100iu
+    // Dosage: e.g. 500mg, 500 mg, 10ml, 2.5mcg, 100iu (excludes concentration units like mg/dL, g/dL)
     private static final Pattern DOSAGE_PATTERN = Pattern.compile(
-            "(?i)\\b(\\d+(?:\\.\\d+)?)\\s*(mg|g|mcg|ml|iu|IU|tablets?|capsules?|drops?|pills?)\\b"
+            "(?i)\\b(\\d+(?:\\.\\d+)?)\\s*(mg|g|mcg|ml|iu|IU|tablets?|capsules?|drops?|pills?)(?!\\s*/\\s*(?:dl|dL|l|L|cumm|mcL|ml|kg))\\b"
     );
 
     // Frequency: 1-0-1, 1-1-1, 0-0-1, 1-0-0, OD, BD, BID, TDS, TID, QID, SOS, once daily, twice daily
@@ -52,10 +52,10 @@ public class ClinicalExtractionService {
     // ── Canonical Lab Test Patterns ─────────────────────────────────────
     private static final List<LabTestDefinition> LAB_DEFINITIONS = List.of(
             new LabTestDefinition("Hemoglobin", "(?i)\\b(Hemoglobin|Haemoglobin|Hb)\\b", "g/dL", new BigDecimal("12.0"), new BigDecimal("17.5")),
-            new LabTestDefinition("Fasting Blood Sugar", "(?i)\\b(Fasting\\s+Blood\\s+Sugar|FBS|Fasting\\s+Glucose)\\b", "mg/dL", new BigDecimal("70.0"), new BigDecimal("100.0")),
-            new LabTestDefinition("Postprandial Blood Sugar", "(?i)\\b(Post\\s*prandial|PPBS|Postprandial\\s+Glucose)\\b", "mg/dL", new BigDecimal("70.0"), new BigDecimal("140.0")),
+            new LabTestDefinition("Fasting Blood Sugar", "(?i)\\b(Fasting\\s+(?:Blood\\s+)?(?:Glucose|Sugar)|FBS|FBG|Blood\\s+Glucose\\s+Fasting)\\b", "mg/dL", new BigDecimal("70.0"), new BigDecimal("100.0")),
+            new LabTestDefinition("Postprandial Blood Sugar", "(?i)\\b(Post\\s*prandial(?:\\s+Blood)?(?:\\s+Glucose|\\s+Sugar)?|PPBS|PPBG)\\b", "mg/dL", new BigDecimal("70.0"), new BigDecimal("140.0")),
             new LabTestDefinition("HbA1c", "(?i)\\b(HbA1c|Glycated\\s+Hemoglobin)\\b", "%", new BigDecimal("4.0"), new BigDecimal("5.6")),
-            new LabTestDefinition("Total WBC Count", "(?i)\\b(Total\\s+Leukocyte\\s+Count|TLC|WBC\\s+Count|Total\\s+WBC)\\b", "cells/mcL", new BigDecimal("4000.0"), new BigDecimal("11000.0")),
+            new LabTestDefinition("Total WBC Count", "(?i)\\b(Total\\s+(?:Leukocyte|WBC)\\s+Count|Total\\s+WBC|TLC|WBC\\s+Count|Leukocytes?)\\b", "cells/mcL", new BigDecimal("4000.0"), new BigDecimal("11000.0")),
             new LabTestDefinition("Platelet Count", "(?i)\\b(Platelet\\s+Count|Platelets)\\b", "10^3/mcL", new BigDecimal("150.0"), new BigDecimal("450.0")),
             new LabTestDefinition("Serum Creatinine", "(?i)\\b(Serum\\s+Creatinine|Creatinine)\\b", "mg/dL", new BigDecimal("0.6"), new BigDecimal("1.3")),
             new LabTestDefinition("TSH", "(?i)\\b(Thyroid\\s+Stimulating\\s+Hormone|TSH)\\b", "μIU/mL", new BigDecimal("0.4"), new BigDecimal("4.5")),
@@ -162,12 +162,13 @@ public class ClinicalExtractionService {
             for (LabTestDefinition def : LAB_DEFINITIONS) {
                 Matcher nameMatcher = Pattern.compile(def.regex).matcher(line);
                 if (nameMatcher.find() && seenTests.add(def.canonicalName)) {
-                    // Look for a number on the line after the test name
+                    // Look for a number on the line after the test name (handles commas like 7,200 or decimals 7.2)
                     String afterName = line.substring(nameMatcher.end()).trim();
-                    Matcher numMatcher = Pattern.compile("[:=]?\\s*(\\d+(?:\\.\\d+)?)").matcher(afterName);
+                    Matcher numMatcher = Pattern.compile("[:=]?\\s*([+-]?\\d[\\d,]*(?:\\.\\d+)?)").matcher(afterName);
                     if (numMatcher.find()) {
                         try {
-                            BigDecimal val = new BigDecimal(numMatcher.group(1)).setScale(3, RoundingMode.HALF_UP);
+                            String rawNum = numMatcher.group(1).replace(",", "").trim();
+                            BigDecimal val = new BigDecimal(rawNum).setScale(3, RoundingMode.HALF_UP);
                             LabFlag flag = LabFlag.NORMAL;
                             if (def.refLow != null && val.compareTo(def.refLow) < 0) {
                                 flag = LabFlag.LOW;
