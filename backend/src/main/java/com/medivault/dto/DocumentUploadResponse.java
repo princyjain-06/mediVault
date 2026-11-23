@@ -31,4 +31,10 @@ public class DocumentUploadResponse {
     private String doctor;
     private String facility;
     private String summary;
+
+    /** Medications extracted from this document via OCR / clinical parser */
+    private java.util.List<MedicationDto> extractedMedications;
+
+    /** Extracted raw text preview */
+    private String extractedTextPreview;
 }

@@ -6,6 +6,14 @@ import { apiClient, USE_MOCK, mockDelay } from './client';
 import { patientService } from './patientService';
 import { MedicalRecord } from '../types';
 
+export interface ExtractedMedication {
+  id: string;
+  name: string;
+  dosage: string;
+  frequency: string;
+  duration?: string;
+}
+
 // ── Backend document shape ──────────────────────────
 export interface ServerDocument {
   id: string;
@@ -19,6 +27,8 @@ export interface ServerDocument {
   doctor?: string;
   facility?: string;
   summary?: string;
+  extractedMedications?: ExtractedMedication[];
+  extractedTextPreview?: string;
 }
 
 // ── Map backend shape → frontend MedicalRecord ──────
@@ -32,6 +42,16 @@ function toMedicalRecord(doc: ServerDocument): MedicalRecord {
     OTHER: 'lab',
   };
 
+  const findings: string[] = [];
+  if (doc.extractedMedications && doc.extractedMedications.length > 0) {
+    findings.push(
+      `Extracted ${doc.extractedMedications.length} medication(s): ` +
+        doc.extractedMedications.map((m) => `${m.name} (${m.dosage}, ${m.frequency})`).join('; ')
+    );
+  } else {
+    findings.push('Document analyzed with local PDFBox/OCR & clinical parser.');
+  }
+
   return {
     id: doc.id,
     title: doc.title,
@@ -40,8 +60,8 @@ function toMedicalRecord(doc: ServerDocument): MedicalRecord {
     facility: doc.facility || '',
     date: doc.reportDate || doc.uploadedAt?.split('T')[0] || '',
     summary: doc.summary || 'Uploaded document.',
-    aiKeyFindings: ['Document uploaded. AI extraction pending.'],
-    tags: [doc.documentType.replace('_', ' ').toLowerCase(), 'uploaded'],
+    aiKeyFindings: findings,
+    tags: [doc.documentType.replace('_', ' ').toLowerCase(), 'extracted'],
     isEncrypted: true,
     fileUrl: `/api/patients/me/documents/${doc.id}/file`,
   };
