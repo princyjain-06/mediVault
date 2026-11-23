@@ -12,6 +12,7 @@ import {
   Trash2,
   Download,
   AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
 import { usePatient } from '../../context/PatientContext';
 import { recordsService } from '../../api/recordsService';
@@ -40,7 +41,20 @@ export const RecordsPage: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleRetryExtraction = async (recordId: string) => {
+    setRetryingId(recordId);
+    try {
+      const updated = await recordsService.retryExtraction(recordId);
+      setRecords((prev) => prev.map((r) => (r.id === recordId ? updated : r)));
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err?.message || 'Failed to retry extraction. Please re-upload the document.');
+    } finally {
+      setRetryingId(null);
+    }
+  };
 
   // ── Load documents from backend on mount ──
   useEffect(() => {
@@ -290,7 +304,7 @@ export const RecordsPage: React.FC = () => {
                 )}
 
                 {/* AI Extracted Findings */}
-                {record.aiKeyFindings?.[0] && (
+                {record.aiKeyFindings?.[0] && !record.tags?.includes('failed') && (
                   <div className="mt-3 rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/60 text-xs">
                     <div className="font-semibold text-teal-700 dark:text-teal-400 flex items-center gap-1 text-[11px]">
                       <Sparkles className="h-3 w-3" /> AI Extracted Finding:
@@ -298,6 +312,24 @@ export const RecordsPage: React.FC = () => {
                     <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-300 line-clamp-1">
                       {record.aiKeyFindings[0]}
                     </p>
+                  </div>
+                )}
+
+                {/* Extraction Failed "Try Again" Option */}
+                {record.tags?.includes('failed') && (
+                  <div className="mt-3 rounded-xl bg-amber-50 p-2.5 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center justify-between text-xs">
+                    <span className="text-amber-800 dark:text-amber-300 font-semibold text-[11px] flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3 text-amber-600 shrink-0" />
+                      Extraction incomplete
+                    </span>
+                    <button
+                      onClick={() => handleRetryExtraction(record.id)}
+                      disabled={retryingId === record.id}
+                      className="rounded-lg bg-amber-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-amber-700 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                    >
+                      <RotateCcw className={cn("h-3 w-3", retryingId === record.id && "animate-spin")} />
+                      {retryingId === record.id ? 'Retrying…' : 'Try again'}
+                    </button>
                   </div>
                 )}
               </div>

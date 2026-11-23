@@ -109,6 +109,16 @@ public class MedicalDocumentController {
                 .body(resource);
     }
 
+    /** Re-run extraction for a failed document ("Try Again"). */
+    @PostMapping("/{documentId}/retry-extraction")
+    public ResponseEntity<DocumentUploadResponse> retryExtraction(
+            Authentication authentication,
+            @PathVariable String documentId
+    ) {
+        String email = authentication.getName();
+        return ResponseEntity.ok(documentService.retryExtraction(email, documentId));
+    }
+
     /** Delete a document and its file. */
     @DeleteMapping("/{documentId}")
     public ResponseEntity<Void> deleteDocument(

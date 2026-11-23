@@ -39,4 +39,10 @@ public class DocumentUploadResponse {
 
     /** Extracted raw text preview */
     private String extractedTextPreview;
+
+    /** Extraction status: PENDING, PROCESSING, DONE, FAILED */
+    private com.medivault.model.enums.ExtractionStatus extractionStatus;
+
+    /** Error message if extractionStatus is FAILED */
+    private String extractionErrorMessage;
 }

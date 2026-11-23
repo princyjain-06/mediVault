@@ -29,6 +29,8 @@ export interface ServerDocument {
   summary?: string;
   extractedMedications?: ExtractedMedication[];
   extractedTextPreview?: string;
+  extractionStatus?: 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED';
+  extractionErrorMessage?: string;
 }
 
 // ── Map backend shape → frontend MedicalRecord ──────
@@ -42,14 +44,24 @@ function toMedicalRecord(doc: ServerDocument): MedicalRecord {
     OTHER: 'lab',
   };
 
+  const isFailed = doc.extractionStatus === 'FAILED';
   const findings: string[] = [];
-  if (doc.extractedMedications && doc.extractedMedications.length > 0) {
+  if (isFailed) {
+    findings.push(doc.extractionErrorMessage || 'AI extraction failed. Click "Try again" to re-process.');
+  } else if (doc.extractedMedications && doc.extractedMedications.length > 0) {
     findings.push(
       `Extracted ${doc.extractedMedications.length} medication(s): ` +
         doc.extractedMedications.map((m) => `${m.name} (${m.dosage}, ${m.frequency})`).join('; ')
     );
   } else {
-    findings.push('Document analyzed with local PDFBox/OCR & clinical parser.');
+    findings.push('Document analyzed with AI extraction & clinical parser.');
+  }
+
+  const tags = [doc.documentType.replace('_', ' ').toLowerCase()];
+  if (isFailed) {
+    tags.push('failed');
+  } else {
+    tags.push('extracted');
   }
 
   return {
@@ -61,7 +73,7 @@ function toMedicalRecord(doc: ServerDocument): MedicalRecord {
     date: doc.reportDate || doc.uploadedAt?.split('T')[0] || '',
     summary: doc.summary || 'Uploaded document.',
     aiKeyFindings: findings,
-    tags: [doc.documentType.replace('_', ' ').toLowerCase(), 'extracted'],
+    tags,
     isEncrypted: true,
     fileUrl: `/api/patients/me/documents/${doc.id}/file`,
   };
@@ -146,6 +158,19 @@ export const recordsService = {
       return;
     }
     await apiClient.delete(`/patients/me/documents/${documentId}`);
+  },
+
+  /**
+   * Re-runs extraction for a failed document ("Try Again").
+   */
+  async retryExtraction(documentId: string): Promise<MedicalRecord> {
+    if (USE_MOCK) {
+      await mockDelay(400);
+      const docs = await this.getMyDocuments();
+      return docs[0];
+    }
+    const response = await apiClient.post<ServerDocument>(`/patients/me/documents/${documentId}/retry-extraction`);
+    return toMedicalRecord(response.data);
   },
 
   // ── Backward-compatible aliases (used by PatientContext refresh) ──
