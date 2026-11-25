@@ -68,9 +68,15 @@ export const SettingsPage: React.FC = () => {
         setEmergencyRelationship(primary.relationship || '');
         setEmergencyPhone(primary.phone || '');
       } else if (profile.emergencyContact) {
+        setPrimaryContactId(profile.emergencyContact.id || null);
         setEmergencyName(profile.emergencyContact.name || '');
         setEmergencyRelationship(profile.emergencyContact.relationship || '');
         setEmergencyPhone(profile.emergencyContact.phone || '');
+      } else {
+        setPrimaryContactId(null);
+        setEmergencyName('');
+        setEmergencyRelationship('');
+        setEmergencyPhone('');
       }
     } catch (err: any) {
       console.error('Failed to load profile or contacts:', err);
@@ -94,7 +100,10 @@ export const SettingsPage: React.FC = () => {
       return;
     }
 
-    const cleanUserPhone = phone.replace(/[\s\-\(\)\+]/g, '').trim();
+    let cleanUserPhone = phone.replace(/[\s\-\(\)\+]/g, '').trim();
+    if (cleanUserPhone.length === 12 && cleanUserPhone.startsWith('91')) {
+      cleanUserPhone = cleanUserPhone.substring(2);
+    }
     if (cleanUserPhone && cleanUserPhone.length !== 10) {
       setErrorMessage('Phone number must be exactly 10 digits');
       return;
@@ -131,6 +140,14 @@ export const SettingsPage: React.FC = () => {
     try {
       setIsSubmitting(true);
 
+      const emContactObj = hasAnyEmergencyField ? {
+        id: primaryContactId || undefined,
+        name: emergencyName.trim(),
+        relationship: emergencyRelationship.trim() || undefined,
+        phone: cleanEmPhone,
+        isPrimary: true,
+      } : undefined;
+
       // 1. Save Patient Profile
       await patientService.updateMyProfile({
         name: name.trim(),
@@ -139,9 +156,10 @@ export const SettingsPage: React.FC = () => {
         bloodGroup: bloodGroup || undefined,
         phone: cleanUserPhone || undefined,
         abhaId: abhaId.trim() || undefined,
+        emergencyContact: emContactObj,
       });
 
-      // 2. Save or Update Emergency Contact (only if at least one field is filled)
+      // 2. Sync Dedicated Emergency Contact Endpoint
       if (hasAnyEmergencyField) {
         const contactPayload = {
           name: emergencyName.trim(),
@@ -155,6 +173,14 @@ export const SettingsPage: React.FC = () => {
         } else {
           const created = await emergencyContactService.createContact(contactPayload);
           setPrimaryContactId(created.id || null);
+        }
+      } else if (primaryContactId) {
+        // Contact was cleared by user - delete from database
+        try {
+          await emergencyContactService.deleteContact(primaryContactId);
+          setPrimaryContactId(null);
+        } catch (delErr) {
+          console.warn('Could not delete cleared contact', delErr);
         }
       }
 

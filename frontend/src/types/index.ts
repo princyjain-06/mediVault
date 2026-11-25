@@ -64,6 +64,7 @@ export interface PatientProfileResponse {
   phone?: string;
   abhaId?: string;
   emergencyContact?: {
+    id?: string;
     name: string;
     relationship?: string;
     phone: string;
@@ -79,6 +80,7 @@ export interface UpdatePatientProfilePayload {
   phone?: string;
   abhaId?: string;
   emergencyContact?: {
+    id?: string;
     name: string;
     relationship?: string;
     phone: string;
