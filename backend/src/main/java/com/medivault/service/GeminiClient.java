@@ -35,7 +35,7 @@ public class GeminiClient {
     @Value("${app.gemini.api-key:${GEMINI_API_KEY:}}")
     private String apiKey;
 
-    @Value("${app.gemini.model:gemini-1.5-flash}")
+    @Value("${app.gemini.model:gemini-3.5-flash-lite}")
     private String modelName;
 
     private final ObjectMapper objectMapper;
@@ -74,8 +74,23 @@ public class GeminiClient {
                   "duration": "e.g. 30 days or null",
                   "page": 1
                 }
+              ],
+              "conditions": [
+                {
+                  "name": "diagnosis written in document",
+                  "status": "ACTIVE | RESOLVED | UNKNOWN",
+                  "diagnosedDate": "YYYY-MM-DD or null"
+                }
+              ],
+              "allergies": [
+                {
+                  "allergen": "allergen written in document",
+                  "reaction": "reaction or null",
+                  "severity": "MILD | MODERATE | SEVERE | UNKNOWN"
+                }
               ]
             }
+            Only include conditions and allergies that are explicitly written in the document; never guess or infer them.
             """;
 
     /**
@@ -83,6 +98,87 @@ public class GeminiClient {
      */
     public boolean isConfigured() {
         return apiKey != null && !apiKey.trim().isBlank();
+    }
+
+    public String getModelName() {
+        return modelName != null ? modelName.trim() : "gemini-3.5-flash-lite";
+    }
+
+    /**
+     * Sends a text-only prompt with system instructions to Gemini and returns raw JSON string.
+     * Retries once if the HTTP call fails or returns invalid JSON.
+     * Never logs prompts, API keys, or responses.
+     */
+    public String generateJson(String systemInstruction, String userPrompt, double temperature) throws Exception {
+        if (!isConfigured()) {
+            throw new IllegalStateException("GEMINI_API_KEY is not configured.");
+        }
+
+        String url = String.format(
+                "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
+                getModelName(), apiKey.trim()
+        );
+
+        Map<String, Object> requestBody = new LinkedHashMap<>();
+        if (systemInstruction != null && !systemInstruction.isBlank()) {
+            requestBody.put("systemInstruction", Map.of(
+                    "parts", List.of(Map.of("text", systemInstruction))
+            ));
+        }
+        requestBody.put("contents", List.of(Map.of(
+                "parts", List.of(Map.of("text", userPrompt))
+        )));
+        requestBody.put("generationConfig", Map.of(
+                "responseMimeType", "application/json",
+                "maxOutputTokens", 4096,
+                "temperature", temperature
+        ));
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+                if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                    throw new RuntimeException("Gemini HTTP error: " + response.getStatusCode());
+                }
+                JsonNode root = objectMapper.readTree(response.getBody());
+                JsonNode candidatePart = root.path("candidates").path(0)
+                        .path("content").path("parts").path(0).path("text");
+                if (candidatePart.isMissingNode() || candidatePart.asText().isBlank()) {
+                    throw new RuntimeException("Gemini returned empty candidate text.");
+                }
+                String clean = stripMarkdownFences(candidatePart.asText().trim());
+                // Validate that the returned text is parseable JSON before returning
+                objectMapper.readTree(clean);
+                return clean;
+            } catch (Exception e) {
+                lastException = e;
+                log.warn("Gemini JSON generation attempt {} failed: {}", attempt, e.getMessage());
+                if (attempt == 1) {
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException ignored) {}
+                }
+            }
+        }
+        throw new RuntimeException("Gemini JSON generation failed after 2 attempts: " +
+                (lastException != null ? lastException.getMessage() : "Unknown error"), lastException);
+    }
+
+    private String stripMarkdownFences(String rawJson) {
+        String cleanJson = rawJson.trim();
+        if (cleanJson.startsWith("```")) {
+            int firstNewline = cleanJson.indexOf('\n');
+            int lastBackticks = cleanJson.lastIndexOf("```");
+            if (firstNewline != -1 && lastBackticks > firstNewline) {
+                cleanJson = cleanJson.substring(firstNewline + 1, lastBackticks).trim();
+            }
+        }
+        return cleanJson;
     }
 
     /**
@@ -288,6 +384,12 @@ public class GeminiClient {
             }
             if (chunkRes.getMedications() != null) {
                 combined.getMedications().addAll(chunkRes.getMedications());
+            }
+            if (chunkRes.getConditions() != null) {
+                combined.getConditions().addAll(chunkRes.getConditions());
+            }
+            if (chunkRes.getAllergies() != null) {
+                combined.getAllergies().addAll(chunkRes.getAllergies());
             }
 
             currentPageOffset += MAX_PAGES_PER_CHUNK;

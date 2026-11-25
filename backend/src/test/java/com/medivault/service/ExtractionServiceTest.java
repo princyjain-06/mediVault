@@ -5,6 +5,8 @@ import com.medivault.dto.gemini.GeminiExtractionResponse;
 import com.medivault.model.*;
 import com.medivault.model.enums.DocumentType;
 import com.medivault.model.enums.ExtractionStatus;
+import com.medivault.repository.ConditionRepository;
+import com.medivault.repository.AllergyRepository;
 import com.medivault.repository.DocumentExtractionRepository;
 import com.medivault.repository.LabResultRepository;
 import com.medivault.repository.MedicalDocumentRepository;
@@ -36,6 +38,8 @@ class ExtractionServiceTest {
     @Mock private ClinicalExtractionService clinicalExtractionService;
     @Mock private LabResultRepository labResultRepository;
     @Mock private MedicationRepository medicationRepository;
+    @Mock private ConditionRepository conditionRepository;
+    @Mock private AllergyRepository allergyRepository;
     @Mock private DocumentExtractionRepository extractionRepository;
     @Mock private MedicalDocumentRepository documentRepository;
     @Mock private FileStorageService fileStorageService;
@@ -50,10 +54,11 @@ class ExtractionServiceTest {
     void setUp() throws Exception {
         extractionService = new ExtractionService(
                 geminiClient, clinicalDataCleaner, textExtractionService, clinicalExtractionService,
-                labResultRepository, medicationRepository, extractionRepository, documentRepository,
+                labResultRepository, medicationRepository, conditionRepository, allergyRepository,
+                extractionRepository, documentRepository,
                 fileStorageService, documentSummarizerService, new ObjectMapper()
         );
-        ReflectionTestUtils.setField(extractionService, "geminiModel", "gemini-1.5-flash");
+        ReflectionTestUtils.setField(extractionService, "geminiModel", "gemini-3.5-flash-lite");
 
         testPatient = Patient.builder().id("pat-100").name("Alice Test").build();
         testDoc = MedicalDocument.builder()
@@ -97,7 +102,6 @@ class ExtractionServiceTest {
         GeminiExtractionResponse geminiResp = new GeminiExtractionResponse();
         geminiResp.setRawText("Gemini raw text");
         when(geminiClient.extract(any(), any())).thenReturn(geminiResp);
-        when(clinicalDataCleaner.cleanLabResults(any(), any(), any(), any())).thenReturn(Collections.emptyList());
         when(documentSummarizerService.generateSummary(any(), any(), any(), any())).thenReturn("AI Summary");
         when(extractionRepository.findByDocument_Id("doc-100")).thenReturn(Optional.empty());
 
@@ -105,7 +109,7 @@ class ExtractionServiceTest {
 
         // Verify gemini engine and DONE status
         verify(extractionRepository).save(argThat(ext ->
-                "gemini-gemini-1.5-flash".equals(ext.getOcrEngine()) &&
+                "gemini-gemini-3.5-flash-lite".equals(ext.getOcrEngine()) &&
                 ext.getStatus() == ExtractionStatus.DONE
         ));
     }

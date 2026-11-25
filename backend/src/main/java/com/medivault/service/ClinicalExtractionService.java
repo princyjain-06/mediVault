@@ -59,7 +59,21 @@ public class ClinicalExtractionService {
             new LabTestDefinition("Platelet Count", "(?i)\\b(Platelet\\s+Count|Platelets)\\b", "10^3/mcL", new BigDecimal("150.0"), new BigDecimal("450.0")),
             new LabTestDefinition("Serum Creatinine", "(?i)\\b(Serum\\s+Creatinine|Creatinine)\\b", "mg/dL", new BigDecimal("0.6"), new BigDecimal("1.3")),
             new LabTestDefinition("TSH", "(?i)\\b(Thyroid\\s+Stimulating\\s+Hormone|TSH)\\b", "μIU/mL", new BigDecimal("0.4"), new BigDecimal("4.5")),
-            new LabTestDefinition("Total Cholesterol", "(?i)\\b(Total\\s+Cholesterol|Cholesterol)\\b", "mg/dL", new BigDecimal("125.0"), new BigDecimal("200.0"))
+            new LabTestDefinition("Total Cholesterol", "(?i)\\b(Total\\s+Cholesterol|Cholesterol)\\b", "mg/dL", new BigDecimal("125.0"), new BigDecimal("200.0")),
+            // ── Liver Function Tests (LFT) ──
+            new LabTestDefinition("Total Bilirubin", "(?i)\\b(Bilirubin[,\t ]+Total|Total\\s+Bilirubin)\\b", "mg/dL", new BigDecimal("0.2"), new BigDecimal("1.2")),
+            new LabTestDefinition("Direct Bilirubin", "(?i)\\b(Bilirubin[,\t ]+Direct|Direct\\s+Bilirubin)\\b", "mg/dL", new BigDecimal("0.0"), new BigDecimal("0.3")),
+            new LabTestDefinition("Indirect Bilirubin", "(?i)\\b(Bilirubin[,\t ]+Indirect|Indirect\\s+Bilirubin)\\b", "mg/dL", new BigDecimal("0.1"), new BigDecimal("1.0")),
+            new LabTestDefinition("AST (SGOT)", "(?i)\\b(AST\\s*\\(SGOT\\)|SGOT|AST)\\b", "U/L", new BigDecimal("5.0"), new BigDecimal("40.0")),
+            new LabTestDefinition("ALT (SGPT)", "(?i)\\b(ALT\\s*\\(SGPT\\)|SGPT|ALT)\\b", "U/L", new BigDecimal("7.0"), new BigDecimal("56.0")),
+            new LabTestDefinition("Alkaline Phosphatase (ALP)", "(?i)\\b(Alkaline\\s+Phosphatase(?:\\s*\\(ALP\\))?|ALP)\\b", "U/L", new BigDecimal("44.0"), new BigDecimal("147.0")),
+            new LabTestDefinition("Total Protein", "(?i)\\b(Total\\s+Protein|Protein[,\t ]+Total)\\b", "g/dL", new BigDecimal("6.0"), new BigDecimal("8.3")),
+            new LabTestDefinition("Albumin", "(?i)\\b(Albumin)\\b", "g/dL", new BigDecimal("3.5"), new BigDecimal("5.0")),
+            new LabTestDefinition("Globulin", "(?i)\\b(Globulin)\\b", "g/dL", new BigDecimal("2.0"), new BigDecimal("3.5")),
+            new LabTestDefinition("A/G Ratio", "(?i)\\b(A/G\\s+Ratio|Albumin[/\t ]+Globulin\\s+Ratio)\\b", "ratio", new BigDecimal("1.0"), new BigDecimal("2.2")),
+            // ── Thyroid Profile ──
+            new LabTestDefinition("Total T3", "(?i)\\b(Triiodothyronine|Total\\s+T3|T3)\\b", "ng/mL", new BigDecimal("0.8"), new BigDecimal("2.0")),
+            new LabTestDefinition("Total T4", "(?i)\\b(Thyroxine|Total\\s+T4|T4)\\b", "µg/dL", new BigDecimal("5.1"), new BigDecimal("14.1"))
     );
 
     /**

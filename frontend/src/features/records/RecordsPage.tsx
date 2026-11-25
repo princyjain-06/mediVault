@@ -18,6 +18,7 @@ import { usePatient } from '../../context/PatientContext';
 import { recordsService } from '../../api/recordsService';
 import { MedicalRecord } from '../../types';
 import { formatDate, cn } from '../../lib/utils';
+import { RecordSummaryModal } from './RecordSummaryModal';
 
 export const RecordsPage: React.FC = () => {
   const { activePatient } = usePatient();
@@ -25,6 +26,7 @@ export const RecordsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
   // ── Records loaded from backend ──
   const [records, setRecords] = useState<MedicalRecord[]>([]);
@@ -186,12 +188,21 @@ export const RecordsPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsUploadModalOpen(true)}
-          className="flex items-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-600/30 hover:bg-teal-700 self-start sm:self-auto"
-        >
-          <UploadCloud className="h-4 w-4" /> Upload New Record
-        </button>
+        <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
+          <button
+            onClick={() => setIsSummaryModalOpen(true)}
+            className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 transition-all"
+          >
+            <Sparkles className="h-4 w-4" /> Summarise Records
+          </button>
+
+          <button
+            onClick={() => setIsUploadModalOpen(true)}
+            className="flex items-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-600/30 hover:bg-teal-700 transition-all"
+          >
+            <UploadCloud className="h-4 w-4" /> Upload New Record
+          </button>
+        </div>
       </div>
 
       {/* Search & Tabs */}
@@ -635,6 +646,11 @@ export const RecordsPage: React.FC = () => {
           </div>
         </div>
       )}
+      {/* AI Longitudinal Summary Modal */}
+      <RecordSummaryModal
+        isOpen={isSummaryModalOpen}
+        onClose={() => setIsSummaryModalOpen(false)}
+      />
     </div>
   );
 };

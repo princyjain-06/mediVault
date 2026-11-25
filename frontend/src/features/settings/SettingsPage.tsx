@@ -16,6 +16,7 @@ import { emergencyContactService } from '../../api/emergencyContactService';
 import { USE_MOCK, API_BASE_URL } from '../../api/client';
 import { BloodGroup } from '../../types';
 import { EmergencyContact } from '../../types/emergencyContact';
+import { AllergiesConditionsSection } from './AllergiesConditionsSection';
 
 export const SettingsPage: React.FC = () => {
   const { refreshPatient } = usePatient();
@@ -477,6 +478,9 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* My Allergies & My Conditions */}
+      <AllergiesConditionsSection />
     </div>
   );
 };

@@ -28,6 +28,12 @@ public class GeminiExtractionResponse {
     @Builder.Default
     private List<GeminiMedicationItem> medications = new ArrayList<>();
 
+    @Builder.Default
+    private List<GeminiConditionItem> conditions = new ArrayList<>();
+
+    @Builder.Default
+    private List<GeminiAllergyItem> allergies = new ArrayList<>();
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -53,5 +59,27 @@ public class GeminiExtractionResponse {
         private String frequency;
         private String duration;
         private Integer page;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class GeminiConditionItem {
+        private String name;
+        private String status;        // ACTIVE, RESOLVED, UNKNOWN
+        private String diagnosedDate; // YYYY-MM-DD or null
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class GeminiAllergyItem {
+        private String allergen;
+        private String reaction;
+        private String severity;      // MILD, MODERATE, SEVERE, UNKNOWN
     }
 }

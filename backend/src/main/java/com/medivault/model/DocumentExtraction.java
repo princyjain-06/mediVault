@@ -27,6 +27,8 @@ public class DocumentExtraction {
     private String id;
 
     @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "document_id", nullable = false, unique = true)
     private MedicalDocument document;

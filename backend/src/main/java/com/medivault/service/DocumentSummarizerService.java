@@ -30,6 +30,9 @@ public class DocumentSummarizerService {
     @Value("${app.gemini.api-key:${GEMINI_API_KEY:}}")
     private String geminiApiKey;
 
+    @Value("${app.gemini.model:gemini-3.5-flash-lite}")
+    private String geminiModel;
+
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -72,7 +75,10 @@ public class DocumentSummarizerService {
                 "Mention key tests or medications and indicate if values are normal or flagged. Do not include markdown headers or bullet points. Text:\n\n" +
                 (text.length() > 4000 ? text.substring(0, 4000) : text);
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + geminiApiKey.trim();
+        String url = String.format(
+                "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
+                geminiModel.trim(), geminiApiKey.trim()
+        );
 
         Map<String, Object> requestBody = Map.of(
                 "contents", List.of(

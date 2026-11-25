@@ -1,6 +1,6 @@
 # MediVault MVP Entity-Relationship Diagram
 
-This diagram visualizes the PostgreSQL database schema managed via Flyway (`V1__init.sql`, `V2__emergency_contacts.sql`, `V3__add_document_metadata.sql`, and `V4__add_document_file_path.sql`).
+This diagram visualizes the PostgreSQL database schema managed via Flyway (`V1__init.sql`, `V2__emergency_contacts.sql`, `V3__add_document_metadata.sql`, `V4__add_document_file_path.sql`, and `V5__symptom_analysis_conditions_allergies.sql`).
 
 ```mermaid
 erDiagram
@@ -12,6 +12,11 @@ erDiagram
     MEDICAL_DOCUMENTS ||--o{ LAB_RESULTS : "originates from"
     PATIENTS ||--o{ MEDICATIONS : "prescribed to"
     MEDICAL_DOCUMENTS ||--o{ MEDICATIONS : "extracted from"
+    PATIENTS ||--o{ CONDITIONS : "diagnosed with"
+    MEDICAL_DOCUMENTS ||--o{ CONDITIONS : "documented in"
+    PATIENTS ||--o{ ALLERGIES : "sensitive to"
+    MEDICAL_DOCUMENTS ||--o{ ALLERGIES : "documented in"
+    PATIENTS ||--o{ SYMPTOM_CHECKS : "performs"
 
     APP_USERS {
         VARCHAR(36) id PK
@@ -107,6 +112,49 @@ erDiagram
         INT page_number
         NUMERIC(4,3) confidence "AI confidence 0.000 - 1.000"
         BOOLEAN verified
+        TIMESTAMP created_at
+    }
+
+    CONDITIONS {
+        VARCHAR(36) id PK
+        VARCHAR(36) patient_id FK
+        VARCHAR(36) document_id FK "Nullable, SET NULL on doc delete"
+        VARCHAR(255) name "Chronic or past diagnosis"
+        VARCHAR(32) status "Enum: ACTIVE, RESOLVED, UNKNOWN"
+        DATE diagnosed_date
+        VARCHAR(32) source "Enum: DOCUMENT, MANUAL"
+        BOOLEAN verified
+        TIMESTAMP created_at
+    }
+
+    ALLERGIES {
+        VARCHAR(36) id PK
+        VARCHAR(36) patient_id FK
+        VARCHAR(36) document_id FK "Nullable, SET NULL on doc delete"
+        VARCHAR(255) allergen "Substance / drug"
+        VARCHAR(255) reaction "e.g. Urticaria, Anaphylaxis"
+        VARCHAR(32) severity "Enum: MILD, MODERATE, SEVERE, UNKNOWN"
+        VARCHAR(32) source "Enum: DOCUMENT, MANUAL"
+        BOOLEAN verified
+        TIMESTAMP created_at
+    }
+
+    SYMPTOM_CHECKS {
+        VARCHAR(36) id PK
+        VARCHAR(36) patient_id FK
+        TEXT symptoms "Free-text description"
+        JSONB selected_symptoms "Selected chip names"
+        VARCHAR(128) body_area
+        INT severity "1-10 scale"
+        INT duration_value "1-365"
+        VARCHAR(16) duration_unit "HOURS, DAYS, WEEKS, MONTHS"
+        VARCHAR(16) onset "SUDDEN, GRADUAL"
+        VARCHAR(32) urgency "Enum: SELF_CARE, SEE_DOCTOR, EMERGENCY"
+        BOOLEAN safety_rule_applied
+        BOOLEAN ai_available
+        JSONB result_json "Full structured triage analysis"
+        TEXT history_snapshot "Exact history text provided to AI"
+        VARCHAR(64) llm_model
         TIMESTAMP created_at
     }
 ```

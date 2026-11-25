@@ -5,7 +5,10 @@ import {
   PersonalizedInsight, 
   PossibleCause, 
   InteractionAlert,
-  TriageTier 
+  TriageTier,
+  SymptomCheckApiRequest,
+  SymptomCheckApiResponse,
+  SymptomCheckSummaryItem
 } from '../types';
 import { MOCK_SYMPTOMS_CATALOG, MOCK_HISTORICAL_ANALYSES, SAMPLE_SYMPTOM_ANALYSES } from './mockData';
 import { patientService } from './patientService';
@@ -32,11 +35,26 @@ function saveAnalyses(analyses: SymptomAnalysis[]) {
 
 export const symptomService = {
   async getSymptomsCatalog(): Promise<SymptomOption[]> {
+    // 30 clinical symptom options are static catalog items on the frontend
+    return MOCK_SYMPTOMS_CATALOG;
+  },
+
+  async runSymptomCheck(payload: SymptomCheckApiRequest): Promise<SymptomCheckApiResponse> {
+    const response = await apiClient.post<SymptomCheckApiResponse>('/symptom-checks', payload);
+    return response.data;
+  },
+
+  async getPastChecks(): Promise<SymptomCheckSummaryItem[]> {
     if (USE_MOCK) {
       await mockDelay(200);
-      return MOCK_SYMPTOMS_CATALOG;
+      return [];
     }
-    const response = await apiClient.get<SymptomOption[]>('/symptoms/catalog');
+    const response = await apiClient.get<SymptomCheckSummaryItem[]>('/symptom-checks');
+    return response.data;
+  },
+
+  async getCheckById(id: string): Promise<SymptomCheckApiResponse> {
+    const response = await apiClient.get<SymptomCheckApiResponse>(`/symptom-checks/${id}`);
     return response.data;
   },
 

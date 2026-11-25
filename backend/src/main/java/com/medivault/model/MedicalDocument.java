@@ -75,6 +75,8 @@ public class MedicalDocument {
     private LocalDateTime uploadedAt;
 
     // ── 1-to-1 Extraction ────────────────────────────────────
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToOne(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true)
     private DocumentExtraction extraction;
 

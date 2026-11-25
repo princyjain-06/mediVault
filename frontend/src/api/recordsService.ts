@@ -4,7 +4,7 @@
  */
 import { apiClient, USE_MOCK, mockDelay } from './client';
 import { patientService } from './patientService';
-import { MedicalRecord } from '../types';
+import { MedicalRecord, PatientRecordSummary } from '../types';
 
 export interface ExtractedMedication {
   id: string;
@@ -171,6 +171,32 @@ export const recordsService = {
     }
     const response = await apiClient.post<ServerDocument>(`/patients/me/documents/${documentId}/retry-extraction`);
     return toMedicalRecord(response.data);
+  },
+
+  /**
+   * Generates a 1-2 page AI clinical summary of all documents and records.
+   */
+  async getRecordsSummary(): Promise<PatientRecordSummary> {
+    const response = await apiClient.get<PatientRecordSummary>('/patients/me/records/summary');
+    return response.data;
+  },
+
+  /**
+   * Downloads the generated PDF health summary report.
+   */
+  async downloadRecordsSummaryPdf(): Promise<void> {
+    const response = await apiClient.get('/patients/me/records/summary/pdf', {
+      responseType: 'blob',
+    });
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'medivault-health-summary.pdf');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   },
 
   // ── Backward-compatible aliases (used by PatientContext refresh) ──

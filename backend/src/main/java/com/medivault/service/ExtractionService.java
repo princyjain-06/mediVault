@@ -3,12 +3,8 @@ package com.medivault.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.medivault.dto.gemini.GeminiExtractionResponse;
 import com.medivault.model.*;
-import com.medivault.model.enums.DocumentType;
-import com.medivault.model.enums.ExtractionStatus;
-import com.medivault.repository.DocumentExtractionRepository;
-import com.medivault.repository.LabResultRepository;
-import com.medivault.repository.MedicalDocumentRepository;
-import com.medivault.repository.MedicationRepository;
+import com.medivault.model.enums.*;
+import com.medivault.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,13 +40,15 @@ public class ExtractionService {
     private final ClinicalExtractionService clinicalExtractionService;
     private final LabResultRepository labResultRepository;
     private final MedicationRepository medicationRepository;
+    private final ConditionRepository conditionRepository;
+    private final AllergyRepository allergyRepository;
     private final DocumentExtractionRepository extractionRepository;
     private final MedicalDocumentRepository documentRepository;
     private final FileStorageService fileStorageService;
     private final DocumentSummarizerService documentSummarizerService;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.gemini.model:gemini-1.5-flash}")
+    @Value("${app.gemini.model:gemini-3.5-flash-lite}")
     private String geminiModel;
 
     /**
@@ -81,7 +79,7 @@ public class ExtractionService {
 
                 // Clean data in Java (NOT in AI)
                 List<LabResult> labs = Collections.emptyList();
-                if (doc.getDocumentType() != DocumentType.PRESCRIPTION) {
+                if (geminiResponse.getLabResults() != null && !geminiResponse.getLabResults().isEmpty()) {
                     labs = clinicalDataCleaner.cleanLabResults(
                             geminiResponse.getLabResults(), doc.getPatient(), doc, doc.getReportDate()
                     );
@@ -92,7 +90,7 @@ public class ExtractionService {
                 }
 
                 List<Medication> meds = Collections.emptyList();
-                if (doc.getDocumentType() != DocumentType.BLOOD_REPORT) {
+                if (geminiResponse.getMedications() != null && !geminiResponse.getMedications().isEmpty()) {
                     meds = clinicalDataCleaner.cleanMedications(
                             geminiResponse.getMedications(), doc.getPatient(), doc, doc.getReportDate()
                     );
@@ -101,6 +99,17 @@ public class ExtractionService {
                         log.info("Saved {} clean medications via Gemini for doc {}", meds.size(), doc.getId());
                     }
                 }
+
+                // If document was categorized as prescription but has lab results and no meds, rectify type
+                if (doc.getDocumentType() == DocumentType.PRESCRIPTION && meds.isEmpty() && !labs.isEmpty()) {
+                    doc.setDocumentType(DocumentType.BLOOD_REPORT);
+                }
+
+                // Save explicitly documented conditions (source = DOCUMENT)
+                saveExtractedConditions(geminiResponse.getConditions(), doc);
+
+                // Save explicitly documented allergies (source = DOCUMENT)
+                saveExtractedAllergies(geminiResponse.getAllergies(), doc);
 
                 // Generate AI/clinical summary
                 String summary = documentSummarizerService.generateSummary(
@@ -143,17 +152,16 @@ public class ExtractionService {
             List<LabResult> labs = Collections.emptyList();
 
             if (!combinedText.isBlank()) {
-                if (doc.getDocumentType() != DocumentType.BLOOD_REPORT) {
-                    meds = clinicalExtractionService.extractMedications(combinedText, doc.getPatient(), doc);
-                    if (!meds.isEmpty()) {
-                        meds = medicationRepository.saveAll(meds);
-                    }
+                meds = clinicalExtractionService.extractMedications(combinedText, doc.getPatient(), doc);
+                if (!meds.isEmpty()) {
+                    meds = medicationRepository.saveAll(meds);
                 }
-                if (doc.getDocumentType() != DocumentType.PRESCRIPTION) {
-                    labs = clinicalExtractionService.extractLabResults(combinedText, doc.getPatient(), doc);
-                    if (!labs.isEmpty()) {
-                        labs = labResultRepository.saveAll(labs);
-                    }
+                labs = clinicalExtractionService.extractLabResults(combinedText, doc.getPatient(), doc);
+                if (!labs.isEmpty()) {
+                    labs = labResultRepository.saveAll(labs);
+                }
+                if (doc.getDocumentType() == DocumentType.PRESCRIPTION && meds.isEmpty() && !labs.isEmpty()) {
+                    doc.setDocumentType(DocumentType.BLOOD_REPORT);
                 }
             }
 
@@ -226,6 +234,14 @@ public class ExtractionService {
         if (!existingMeds.isEmpty()) {
             medicationRepository.deleteAll(existingMeds);
         }
+        List<Condition> existingConditions = conditionRepository.findByPatient_IdAndDocument_Id(doc.getPatient().getId(), doc.getId());
+        if (!existingConditions.isEmpty()) {
+            conditionRepository.deleteAll(existingConditions);
+        }
+        List<Allergy> existingAllergies = allergyRepository.findByPatient_IdAndDocument_Id(doc.getPatient().getId(), doc.getId());
+        if (!existingAllergies.isEmpty()) {
+            allergyRepository.deleteAll(existingAllergies);
+        }
 
         // Reset status to PROCESSING
         saveExtractionRecord(doc, null, "{}", ExtractionStatus.PROCESSING,
@@ -234,5 +250,80 @@ public class ExtractionService {
 
         // Re-process
         processDocument(doc, doc.getSummary());
+    }
+
+    /**
+     * Saves conditions explicitly written in the document with source = DOCUMENT.
+     */
+    private void saveExtractedConditions(List<GeminiExtractionResponse.GeminiConditionItem> items, MedicalDocument doc) {
+        if (items == null || items.isEmpty()) return;
+        List<Condition> toSave = new java.util.ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (var item : items) {
+            if (item.getName() == null || item.getName().isBlank()) continue;
+            String cleanName = item.getName().trim();
+            if (!seen.add(cleanName.toLowerCase())) continue;
+
+            ConditionStatus status = ConditionStatus.UNKNOWN;
+            if (item.getStatus() != null) {
+                try {
+                    status = ConditionStatus.valueOf(item.getStatus().trim().toUpperCase());
+                } catch (IllegalArgumentException ignored) {}
+            }
+
+            LocalDate diagDate = null;
+            if (item.getDiagnosedDate() != null && !item.getDiagnosedDate().isBlank()) {
+                try {
+                    diagDate = LocalDate.parse(item.getDiagnosedDate().trim());
+                } catch (Exception ignored) {}
+            }
+
+            toSave.add(Condition.builder()
+                    .patient(doc.getPatient())
+                    .document(doc)
+                    .name(cleanName)
+                    .status(status)
+                    .diagnosedDate(diagDate)
+                    .source(RecordSource.DOCUMENT)
+                    .verified(false)
+                    .build());
+        }
+        if (!toSave.isEmpty()) {
+            conditionRepository.saveAll(toSave);
+        }
+    }
+
+    /**
+     * Saves allergies explicitly written in the document with source = DOCUMENT.
+     */
+    private void saveExtractedAllergies(List<GeminiExtractionResponse.GeminiAllergyItem> items, MedicalDocument doc) {
+        if (items == null || items.isEmpty()) return;
+        List<Allergy> toSave = new java.util.ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (var item : items) {
+            if (item.getAllergen() == null || item.getAllergen().isBlank()) continue;
+            String cleanAllergen = item.getAllergen().trim();
+            if (!seen.add(cleanAllergen.toLowerCase())) continue;
+
+            AllergySeverity severity = AllergySeverity.UNKNOWN;
+            if (item.getSeverity() != null) {
+                try {
+                    severity = AllergySeverity.valueOf(item.getSeverity().trim().toUpperCase());
+                } catch (IllegalArgumentException ignored) {}
+            }
+
+            toSave.add(Allergy.builder()
+                    .patient(doc.getPatient())
+                    .document(doc)
+                    .allergen(cleanAllergen)
+                    .reaction(item.getReaction() != null && !item.getReaction().isBlank() ? item.getReaction().trim() : null)
+                    .severity(severity)
+                    .source(RecordSource.DOCUMENT)
+                    .verified(false)
+                    .build());
+        }
+        if (!toSave.isEmpty()) {
+            allergyRepository.saveAll(toSave);
+        }
     }
 }
